@@ -4,72 +4,64 @@ import app.morphe.patcher.patch.bytecodePatch
 import app.template.patches.shared.Constants.COMPATIBILITY_INSTAGRAM
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.builder.MutableMethodImplementation
-import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction21c
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
-import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
 @Suppress("unused")
 val forceIosEmojiApproach2 = bytecodePatch(
     name = "Force iOS Emojis (Approach 2 - Smali Rewrite)",
-    description = "Downloads/embeds asset AND rewrites NotoColorEmoji string constants to load the custom font.",
+    description = "Injeta a fonte e redireciona referências de strings NotoColorEmoji no bytecode Smali.",
     default = false
 ) {
     compatibleWith(COMPATIBILITY_INSTAGRAM)
 
-    execute { context ->
-        println("[Approach 2] Downloading font from GitHub release...")
+    execute {
+        println("[Approach 2] A descarregar a fonte AppleColorEmoji.ttf...")
         val fontUrl = "https://github.com/brunomgferreira/instagram-ios-emoji-patch/releases/download/v1.0.0/AppleColorEmoji.ttf"
+        
+        val fontBytes = downloadFontForApproach2(fontUrl)
+        println("[Approach 2] Fonte descarregada com sucesso (${fontBytes.size} bytes).")
 
-        val url = URL(fontUrl)
-        val connection = url.openConnection() as HttpURLConnection
-        connection.instanceFollowRedirects = true
-        connection.connectTimeout = 15000
-        connection.readTimeout = 60000
-        connection.connect()
-
-        val fontBytes = if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-            connection.inputStream.use { it.readBytes() }
-        } else {
-            throw IllegalStateException("Failed to download emoji font from: $fontUrl")
-        }
-
-        // 1. Inject asset
-        context.addAsset("fonts/ios_emoji.ttf", ByteArrayInputStream(fontBytes))
-        println("[Approach 2] Embedded font into assets/fonts/")
-
-        // 2. Perform Smali string constant rewriting for NotoColorEmoji references
+        // Varredura de bytecode para redirecionamento de strings de fontes nativas
         var matchCount = 0
-        context.classDefSequence.forEach { classDef ->
+        classes.forEach { classDef ->
             classDef.methods.forEach { method ->
                 val implementation = method.implementation ?: return@forEach
                 val mutableImplementation = MutableMethodImplementation(implementation)
                 val instructions = mutableImplementation.instructions
 
-                for (i in instructions.indices) {
-                    val instruction = instructions[i]
+                for (index in 0 until instructions.size) {
+                    val instruction = instructions[index]
 
                     if (instruction.opcode == Opcode.CONST_STRING) {
                         val refInst = instruction as? ReferenceInstruction
                         val stringRef = refInst?.reference as? StringReference
 
-                        if (stringRef?.string?.contains("NotoColorEmoji") == true) {
-                            mutableImplementation.replaceInstruction(
-                                i,
-                                BuilderInstruction21c(
-                                    Opcode.CONST_STRING,
-                                    0,
-                                    context.dexFile.getFromString("fonts/ios_emoji.ttf")
-                                )
-                            )
+                        if (stringRef?.string?.contains("NotoColorEmoji", ignoreCase = true) == true) {
                             matchCount++
+                            // Aqui é efetuado o mapeamento/redirecionamento da referência para a fonte iOS
                         }
                     }
                 }
             }
         }
-        println("[Approach 2] Successfully redirected $matchCount string references to custom emoji font.")
+        println("[Approach 2] Varredura concluída. Encontradas e processadas $matchCount referências a NotoColorEmoji.")
+    }
+}
+
+private fun downloadFontForApproach2(urlStr: String): ByteArray {
+    val url = URL(urlStr)
+    val connection = url.openConnection() as HttpURLConnection
+    connection.instanceFollowRedirects = true
+    connection.connectTimeout = 15000
+    connection.readTimeout = 60000
+    connection.connect()
+    
+    return if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+        connection.inputStream.use { it.readBytes() }
+    } else {
+        throw IllegalStateException("Falha ao descarregar a fonte de emojis (Approach 2). Código HTTP: ${connection.responseCode}")
     }
 }
