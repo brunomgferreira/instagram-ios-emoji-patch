@@ -6,17 +6,18 @@ import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.rawResourcePatch
-import app.morphe.patcher.util.getReference
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
-import app.morphe.patcher.util.registersUsed
 import app.morphe.patcher.util.smali.toInstruction
 import app.template.patches.shared.Constants.COMPATIBILITY_INSTAGRAM
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.builder.MethodImplementationBuilder
 import com.android.tools.smali.dexlib2.iface.Method
+import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.Instruction
+import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.immutable.ImmutableMethod
 import com.android.tools.smali.dexlib2.immutable.ImmutableMethodParameter
@@ -164,7 +165,7 @@ private fun MutableClass.overrideTypefaceAssignment() {
 /** A `Paint.setTypeface` call, where custom drawn text (Litho, spans) sets its font. */
 private fun Instruction.isPaintTypefaceCall() =
     (opcode == Opcode.INVOKE_VIRTUAL || opcode == Opcode.INVOKE_VIRTUAL_RANGE) &&
-        getReference<MethodReference>()?.let { reference ->
+        ((this as? ReferenceInstruction)?.reference as? MethodReference)?.let { reference ->
             reference.name == "setTypeface" &&
                 reference.definingClass in PAINT_CLASSES &&
                 reference.parameterTypes.map(CharSequence::toString) == listOf(TYPEFACE)
@@ -180,7 +181,7 @@ private fun MutableMethod.hookPaintTypefaceCalls() {
         .sortedDescending()
         .forEach { callIndex ->
             // The paint is the first register of the call, the typeface the second.
-            val register = getInstruction(callIndex).registersUsed[1]
+            val register = getInstruction(callIndex).typefaceRegister()
             addInstructions(
                 callIndex,
                 """
@@ -190,3 +191,11 @@ private fun MutableMethod.hookPaintTypefaceCalls() {
             )
         }
 }
+
+/** The second register of an `invoke-virtual` on a paint, which is the typeface. */
+private fun Instruction.typefaceRegister() =
+    when (this) {
+        is FiveRegisterInstruction -> registerD
+        is RegisterRangeInstruction -> startRegister + 1
+        else -> throw PatchException("Unexpected instruction $opcode")
+    }
