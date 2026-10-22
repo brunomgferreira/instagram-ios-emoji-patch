@@ -25,7 +25,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 private const val FONT_URL =
-    "https://github.com/brunomgferreira/instagram-ios-emoji-patch/releases/download/v1.0.0/AppleColorEmoji.ttf"
+    "https://github.com/brunomgferreira/instagram-ios-emoji-patch/releases/download/v1.1.1/iOS.ttf"
+/** https://github.com/brunomgferreira/instagram-ios-emoji-patch/releases/download/v1.0.0/AppleColorEmoji.ttf" */
 
 private const val FONT_ASSET = "assets/fonts/ios_emoji.ttf"
 
