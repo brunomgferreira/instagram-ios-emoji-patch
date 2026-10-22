@@ -13,6 +13,8 @@ updates:
     target-branch: dev
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: "conventional-changelog-conventionalcommits"
 
   - package-ecosystem: gradle
     labels: []
